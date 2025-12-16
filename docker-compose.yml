@@ -1,0 +1,57 @@
+services:
+  db-primary:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app_pwd
+      POSTGRES_DB: appdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./init-primary.sh:/docker-entrypoint-initdb.d/init-primary.sh
+      - db-primary-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d appdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  db-replica:
+    image: postgres:16
+    depends_on:
+      db-primary:
+        condition: service_healthy
+    environment:
+      POSTGRES_PASSWORD: app_pwd
+    ports:
+      - "5433:5432"
+    command: |
+      bash -c "
+      rm -rf /var/lib/postgresql/data/*
+      PGPASSWORD=repl_pwd pg_basebackup -h db-primary -D /var/lib/postgresql/data -U repl -v -P -X stream -w
+      touch /var/lib/postgresql/data/standby.signal
+      # Configure primary connection info in postgresql.auto.conf
+      echo \"primary_conninfo = 'host=db-primary port=5432 user=repl password=repl_pwd'\" >> /var/lib/postgresql/data/postgresql.auto.conf
+      docker-entrypoint.sh postgres
+      "
+    volumes:
+      - db-replica-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  haproxy:
+    image: haproxy:2.9
+    depends_on:
+      - db-primary
+      - db-replica
+    ports:
+      - "5439:5432"
+    volumes:
+      - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+
+volumes:
+  db-primary-data:
+  db-replica-data:
