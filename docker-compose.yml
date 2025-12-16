@@ -30,7 +30,6 @@ services:
       rm -rf /var/lib/postgresql/data/*
       PGPASSWORD=repl_pwd pg_basebackup -h db-primary -D /var/lib/postgresql/data -U repl -v -P -X stream -w
       touch /var/lib/postgresql/data/standby.signal
-      # Configure primary connection info in postgresql.auto.conf
       echo \"primary_conninfo = 'host=db-primary port=5432 user=repl password=repl_pwd'\" >> /var/lib/postgresql/data/postgresql.auto.conf
       docker-entrypoint.sh postgres
       "
